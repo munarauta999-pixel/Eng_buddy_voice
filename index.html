@@ -104,7 +104,7 @@ Rules for the other fields (shown on screen): "corrections" max 3 items (empty a
 
 const $ = id => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const MODEL = 'gemini-3.8-flash';
+const MODEL = 'models/gemini-3.8-flash';
 let rec = null, state = 'idle', history = [], voices = [], finalText = '';
 
 $('key').value = localStorage.getItem('eb_key') || '';

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eng Buddy Voice</title>
+<style>
+  :root{--bg:#0f1220;--card:#1a1f36;--card2:#232949;--text:#eef0ff;--muted:#9aa1c7;--accent:#7c5cff;--accent2:#22d3a6;--warn:#ff6b6b}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+  .wrap{width:100%;max-width:560px;padding:16px 16px 40px}
+  h1{font-size:1.25rem;margin:4px 0 2px}
+  .sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
+  .card{background:var(--card);border-radius:16px;padding:14px;margin-bottom:12px}
+  label{font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px}
+  input,select{width:100%;background:var(--card2);color:var(--text);border:1px solid #333a66;border-radius:10px;padding:10px;font-size:.95rem}
+  .row{display:flex;gap:8px}.row>div{flex:1}
+  .check{display:flex;align-items:center;gap:8px;font-size:.88rem;margin-top:10px;color:var(--muted)}
+  .check input{width:auto}
+  .stage{text-align:center;padding:18px 10px 8px}
+  #mic{width:104px;height:104px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:2.4rem;cursor:pointer;box-shadow:0 8px 30px rgba(124,92,255,.45);transition:transform .15s,background .2s}
+  #mic:active{transform:scale(.95)}
+  #mic.listening{background:var(--warn);animation:pulse 1.2s infinite}
+  #mic.thinking{background:#555d8f;animation:none}
+  #mic.speaking{background:var(--accent2);color:#06281f;animation:pulse2 1.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,107,107,.6)}100%{box-shadow:0 0 0 28px rgba(255,107,107,0)}}
+  @keyframes pulse2{0%{box-shadow:0 0 0 0 rgba(34,211,166,.55)}100%{box-shadow:0 0 0 28px rgba(34,211,166,0)}}
+  #status{margin-top:12px;font-size:.95rem;color:var(--muted);min-height:1.3em}
+  #live{margin-top:6px;font-size:1rem;min-height:1.4em;font-style:italic}
+  .textrow{display:flex;gap:8px;margin-top:10px}
+  .textrow button{background:var(--card2);color:var(--text);border:1px solid #333a66;border-radius:10px;padding:0 14px;cursor:pointer}
+  .bubble{border-radius:14px;padding:10px 12px;margin-bottom:8px;font-size:.95rem;line-height:1.45}
+  .me{background:var(--card2);margin-left:28px}
+  .bot{background:#262d57;margin-right:12px}
+  .sec{margin-top:10px;padding-top:8px;border-top:1px solid #3a4175;font-size:.88rem}
+  .sec h4{margin:0 0 6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--accent2)}
+  .item{margin-bottom:6px}.item .why{color:var(--muted)}
+  .bad{color:#ff9a9a;text-decoration:line-through}.good{color:#7df0cc}
+  .err{color:var(--warn);font-size:.9rem;margin-top:8px}
+  #stop{display:none;margin:10px auto 0;background:none;border:1px solid #444b7d;color:var(--muted);border-radius:20px;padding:6px 14px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎙️ Eng Buddy Voice</h1>
+  <div class="sub">Bol yaar, English practice karte hain. Mic dabao aur baat shuru!</div>
+
+  <div class="card" id="setup">
+    <label>Gemini API key (Google AI Studio se free)</label>
+    <input id="key" type="password" placeholder="AIza..." autocomplete="off">
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Main bolunga</label>
+        <select id="lang">
+          <option value="en-IN">English (India)</option>
+          <option value="hi-IN">Hindi / Hinglish</option>
+          <option value="en-US">English (US)</option>
+        </select>
+      </div>
+      <div>
+        <label>Bolne ki speed</label>
+        <select id="rate">
+          <option value="0.85">Slow</option>
+          <option value="1" selected>Normal</option>
+          <option value="1.15">Fast</option>
+        </select>
+      </div>
+    </div>
+    <div class="check"><input type="checkbox" id="auto" checked><span>Hands-free: jawab ke baad mic khud on ho jaaye</span></div>
+    <div class="check"><input type="checkbox" id="speakAll" checked><span>Eng Buddy ka jawab bolke sunao</span></div>
+  </div>
+
+  <div class="card stage">
+    <button id="mic" aria-label="Microphone">🎤</button>
+    <div id="status">Mic dabao aur bolo</div>
+    <div id="live"></div>
+    <button id="stop">⏹ Bolna band karo</button>
+    <div class="textrow">
+      <input id="typed" placeholder="Ya yahan type karo (mic na chale toh)">
+      <button id="send">Send</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<script>
+const SYSTEM = `You are "Eng Buddy", a friendly English-speaking tutor for Indian learners, talking to them by VOICE. You are their dost, not a teacher. Talk in natural, casual Hinglish (Hindi in Roman script mixed with English, roughly 50/50), like friends on WhatsApp. Use words like yaar, arre, chal, bilkul, mast. Add a light, kind joke now and then. Never mock the learner. Be encouraging: praise something specific first, then fix mistakes gently.
+
+The learner's words come from speech recognition, so IGNORE punctuation, capitalization and obvious transcription glitches. Only correct real grammar, word-choice or phrasing mistakes. If they spoke Hindi/Hinglish, help them say it in English.
+
+Return ONLY valid JSON with exactly these keys:
+{
+ "spoken": string,
+ "corrections": [{"original": string, "better": string, "why": string}],
+ "vocab": [{"word": string, "better": string, "example": string}],
+ "tone": string,
+ "question": string
+}
+
+Rules for "spoken" (this is read aloud by text-to-speech): 3 to 5 short sentences. React like a friend, mention the single most important correction by saying the corrected English sentence out loud with a one-line reason, optionally one vocabulary tip, and END with the same single question as in "question". Plain text only: no emojis, no markdown, no asterisks, no lists, no brackets.
+Rules for the other fields (shown on screen): "corrections" max 3 items (empty array if none), "vocab" 2 or 3 items, "tone" is one line naming the tone and whether it fits, "question" is exactly ONE fun, relatable question that makes them speak more English. Never ask more than one question. Keep explanations (why, tone) in casual Hinglish; keep corrected sentences and vocab in English. Match the learner's level; for beginners use simpler words and fewer corrections.`;
+
+const $ = id => document.getElementById(id);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const MODEL = 'gemini-2.5-flash';
+let rec = null, state = 'idle', history = [], voices = [], finalText = '';
+
+$('key').value = localStorage.getItem('eb_key') || '';
+['lang','rate'].forEach(i => { const v = localStorage.getItem('eb_'+i); if (v) $(i).value = v; $(i).onchange = () => localStorage.setItem('eb_'+i, $(i).value); });
+$('key').onchange = () => localStorage.setItem('eb_key', $('key').value.trim());
+
+function setState(s, msg){
+  state = s;
+  const m = $('mic'); m.className = s === 'idle' ? '' : s;
+  m.textContent = {idle:'🎤', listening:'🛑', thinking:'💭', speaking:'🔊'}[s];
+  $('status').textContent = msg || {idle:'Mic dabao aur bolo', listening:'Sun raha hoon... bolo!', thinking:'Soch raha hoon...', speaking:'Eng Buddy bol raha hai (tap karke rok sakte ho)'}[s];
+  $('stop').style.display = s === 'speaking' ? 'block' : 'none';
+}
+function showErr(t){ $('err').textContent = t || ''; }
+
+function loadVoices(){ voices = speechSynthesis.getVoices(); }
+if ('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function pickVoice(){
+  return voices.find(v => v.lang === 'en-IN') || voices.find(v => v.lang === 'hi-IN') || voices.find(v => v.lang.startsWith('en')) || null;
+}
+
+function startListening(){
+  if (!SR){ showErr('Is browser mein voice input support nahi hai. Chrome ya Edge use karo, ya neeche type karo.'); return; }
+  if (!$('key').value.trim()){ showErr('Pehle Gemini API key daalo.'); return; }
+  showErr(''); speechSynthesis.cancel(); finalText = ''; $('live').textContent = '';
+  rec = new SR();
+  rec.lang = $('lang').value; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  rec.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t + ' '; else interim += t;
+    }
+    $('live').textContent = (finalText + interim).trim();
+  };
+  rec.onerror = e => {
+    if (e.error === 'no-speech'){ showErr('Kuch sunai nahi diya, ek baar phir try karo.'); }
+    else if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){ showErr('Mic ki permission do (browser mein allow karo). Page https ya localhost par hona chahiye.'); }
+    else if (e.error !== 'aborted'){ showErr('Mic error: ' + e.error); }
+  };
+  rec.onend = () => {
+    if (state !== 'listening') return;
+    const t = finalText.trim() || $('live').textContent.trim();
+    if (t) ask(t); else setState('idle');
+  };
+  try { rec.start(); setState('listening'); } catch(e){ showErr('Mic start nahi hua: ' + e.message); setState('idle'); }
+}
+
+function addBubble(cls, text){
+  const d = document.createElement('div'); d.className = 'bubble ' + cls; d.textContent = text;
+  $('log').prepend(d); return d;
+}
+function section(title, items){
+  const s = document.createElement('div'); s.className = 'sec';
+  const h = document.createElement('h4'); h.textContent = title; s.appendChild(h);
+  items.forEach(el => s.appendChild(el)); return s;
+}
+function line(parts){
+  const d = document.createElement('div'); d.className = 'item';
+  parts.forEach(([cls, txt]) => { const sp = document.createElement('div'); if (cls) sp.className = cls; sp.textContent = txt; d.appendChild(sp); });
+  return d;
+}
+function renderReply(r){
+  const b = document.createElement('div'); b.className = 'bubble bot';
+  const p = document.createElement('div'); p.textContent = r.spoken; b.appendChild(p);
+  if (r.corrections && r.corrections.length)
+    b.appendChild(section('Corrections', r.corrections.map(c => line([['bad', c.original], ['good', c.better], ['why', c.why]]))));
+  else b.appendChild(section('Corrections', [line([['good', 'Zero mistakes yaar, full marks! 🎉']])]));
+  if (r.vocab && r.vocab.length)
+    b.appendChild(section('Vocabulary Boost', r.vocab.map(v => line([['', `"${v.word}" → "${v.better}"`], ['why', v.example]]))));
+  if (r.tone) b.appendChild(section('Tone Analysis', [line([['', r.tone]])]));
+  if (r.question) b.appendChild(section('Your Turn', [line([['', r.question]])]));
+  $('log').prepend(b);
+}
+
+async function ask(userText){
+  setState('thinking'); $('live').textContent = '';
+  addBubble('me', userText);
+  history.push({role:'user', parts:[{text:userText}]});
+  if (history.length > 20) history = history.slice(-20);
+  try{
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent($('key').value.trim())}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        systemInstruction:{parts:[{text:SYSTEM}]},
+        contents: history,
+        generationConfig:{temperature:0.8, responseMimeType:'application/json'}
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || ('HTTP ' + res.status));
+    const raw = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    const r = JSON.parse(raw.replace(/^```json|```$/g, '').trim());
+    history.push({role:'model', parts:[{text:raw}]});
+    renderReply(r);
+    speak(r.spoken);
+  }catch(e){
+    history.pop();
+    showErr('Gadbad ho gayi: ' + e.message);
+    setState('idle');
+  }
+}
+
+function speak(text){
+  if (!$('speakAll').checked || !('speechSynthesis' in window)){ afterSpeak(); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = pickVoice(); if (v){ u.voice = v; u.lang = v.lang; } else u.lang = 'en-IN';
+  u.rate = parseFloat($('rate').value);
+  u.onstart = () => setState('speaking');
+  u.onend = afterSpeak;
+  u.onerror = afterSpeak;
+  setState('speaking');
+  speechSynthesis.speak(u);
+}
+function afterSpeak(){
+  if (state === 'idle') return;
+  setState('idle');
+  if ($('auto').checked) setTimeout(startListening, 400);
+}
+
+$('mic').onclick = () => {
+  if (state === 'idle') startListening();
+  else if (state === 'listening'){ rec && rec.stop(); }
+  else if (state === 'speaking'){ speechSynthesis.cancel(); setState('idle'); }
+};
+$('stop').onclick = () => { speechSynthesis.cancel(); setState('idle'); };
+function sendTyped(){
+  const t = $('typed').value.trim(); if (!t) return;
+  if (!$('key').value.trim()){ showErr('Pehle Gemini API key daalo.'); return; }
+  $('typed').value = ''; showErr(''); speechSynthesis.cancel(); ask(t);
+}
+$('send').onclick = sendTyped;
+$('typed').onkeydown = e => { if (e.key === 'Enter') sendTyped(); };
+
+if (!SR) showErr('Heads up: voice input ke liye Chrome ya Edge chahiye. Abhi sirf type karke bhi chala sakte ho.');
+</script>
+</body>
+</html>
